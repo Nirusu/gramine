@@ -4,7 +4,7 @@ loader.preload = "file:{{ graphene.libos }}"
 libos.entrypoint = "client"
 loader.log_level = "{{ log_level }}"
 
-loader.env.LD_LIBRARY_PATH = "/lib:{{ arch_libdir }}:/usr/{{ arch_libdir }}:/libs"
+loader.env.LD_LIBRARY_PATH = "/lib:{{ arch_libdir }}:/usr{{ arch_libdir }}"
 loader.env.RA_TLS_CLIENT_INSIDE_SGX = "1"
 loader.env.LC_ALL = "C"
 
@@ -21,7 +21,7 @@ fs.mount.lib2.uri = "file:{{ arch_libdir }}"
 
 fs.mount.lib3.type = "chroot"
 fs.mount.lib3.path = "/usr{{ arch_libdir }}"
-fs.mount.lib3.uri = "file:/usr/{{ arch_libdir }}"
+fs.mount.lib3.uri = "file:/usr{{ arch_libdir }}"
 
 fs.mount.etc.type = "chroot"
 fs.mount.etc.path = "/etc"
@@ -32,22 +32,21 @@ sgx.enclave_size = "256M"
 sgx.thread_num = 4
 
 sgx.trusted_files = [
-  "file:client",
-  "file:{{ graphene.runtimedir() }}/",
-  "file:{{ arch_libdir }}/",
-  "file:/usr/{{ arch_libdir }}/",
-  "file:./libs/",
+    "file:client",
+    "file:{{ graphene.runtimedir() }}/",
+    "file:{{ arch_libdir }}/",
+    "file:/usr{{ arch_libdir }}/",
 ]
 
 sgx.allowed_files = [
-  "file:/etc/nsswitch.conf",
-  "file:/etc/host.conf",
-  "file:/etc/resolv.conf",
-  "file:/etc/ethers",
-  "file:/etc/hosts",
-  "file:/etc/group",
-  "file:/etc/passwd",
-  "file:/etc/gai.conf",
-  "file:/etc/ssl/certs/ca-certificates.crt",
-  "file:/etc/sgx_default_qcnl.conf",
+    "file:/etc/nsswitch.conf",
+    "file:/etc/host.conf",
+    "file:/etc/resolv.conf",
+    "file:/etc/ethers",
+    "file:/etc/hosts",
+    "file:/etc/group",
+    "file:/etc/passwd",
+    "file:/etc/gai.conf",
+    "file:/etc/ssl/certs/ca-certificates.crt",
+    "file:/etc/sgx_default_qcnl.conf",
 ]
