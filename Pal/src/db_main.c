@@ -215,9 +215,6 @@ static int build_envs(const char** orig_envp, bool propagate, const char*** out_
     if (!new_envp)
         return -PAL_ERROR_NOMEM;
 
-    /* For simplicity, allocate each env anew; this is suboptimal but happens only once. First
-     * go through original envs and populate new_envp with only those that are not overwritten by
-     * manifest envs. Then append all manifest envs to new_envp. */
     size_t idx = 0;
 
     /* First, go through original variables and copy the ones that we're going to use (because of
@@ -507,8 +504,8 @@ noreturn void pal_main(uint64_t instance_id,       /* current instance id */
 
     /* we don't modify original `environments` but deep-copy them into `final_environments`,
      * augmented based on `loader.env.key` manifest options */
-    const char** initial_environments = NULL;
-    const char** final_environments   = NULL;
+    const char** orig_environments  = NULL;
+    const char** final_environments = NULL;
 
     bool use_host_env;
     ret = toml_bool_in(g_pal_state.manifest_root, "loader.insecure__use_host_env",
@@ -540,24 +537,24 @@ noreturn void pal_main(uint64_t instance_id,       /* current instance id */
     if (env_src_file) {
         /* Insert environment variables from a file. We trust the file contents (this can be
          * achieved using protected or trusted files). */
-        ret = load_cstring_array(env_src_file, &initial_environments);
+        ret = load_cstring_array(env_src_file, &orig_environments);
         if (ret < 0)
             INIT_FAIL(-ret, "Cannot load environment variables from 'loader.env_src_file'");
     } else {
         /* Environment variables are taken from the host. */
-        initial_environments = environments;
+        orig_environments = environments;
     }
 
     // TODO: Envs from file should be able to override ones from the manifest, but current
     // code makes this hard to implement.
-    ret = build_envs(initial_environments, use_host_env || env_src_file, &final_environments);
+    ret = build_envs(orig_environments, use_host_env || env_src_file, &final_environments);
     if (ret < 0)
         INIT_FAIL(-ret, "Building the final environment based on the original environment and the"
                         " manifest failed");
 
-    if (initial_environments != environments) {
-        free((char*)initial_environments[0]);
-        free(initial_environments);
+    if (orig_environments != environments) {
+        free((char*)orig_environments[0]);
+        free(orig_environments);
     }
     free(env_src_file);
 
