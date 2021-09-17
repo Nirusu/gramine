@@ -547,7 +547,8 @@ noreturn void pal_main(uint64_t instance_id,       /* current instance id */
 
     // TODO: Envs from file should be able to override ones from the manifest, but current
     // code makes this hard to implement.
-    ret = build_envs(orig_environments, use_host_env || env_src_file, &final_environments);
+    ret = build_envs(orig_environments, /*propagate=*/use_host_env || env_src_file,
+                     &final_environments);
     if (ret < 0)
         INIT_FAIL(-ret, "Building the final environment based on the original environment and the"
                         " manifest failed");

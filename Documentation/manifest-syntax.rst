@@ -193,9 +193,9 @@ are "consumed" by ``insecure__use_host_env``).
 .. note ::
    It is tempting to try to passthrough all environment variables using
    ``insecure__use_host_env`` and then disallow some of them using ``passthrough
-   = false``. However, this deny list approach is intentionally prohibited for
-   security reasons. Graphene loudly fails if any ``passthrough = false``
-   manifest options are set.
+   = false``. However, this deny list approach is intentionally prohibited
+   because it's inherently insecure (doesn't provide any real security).
+   Graphene loudly fails if ``passthrough = false`` manifest options are set.
 
 Disabling ASLR
 ^^^^^^^^^^^^^^
