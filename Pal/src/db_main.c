@@ -140,19 +140,19 @@ static int get_env_value_from_manifest(toml_table_t* toml_envs, const char* key,
     return 0;
 }
 
+static int create_empty_envs(const char*** out_envp) {
+    const char** new_envp = malloc(sizeof(*new_envp));
+    if (!new_envp)
+        return -PAL_ERROR_NOMEM;
+
+    new_envp[0] = NULL;
+    *out_envp = new_envp;
+    return 0;
+}
+
 /* This function leaks memory on failure (and this is non-trivial to fix), but the assumption is
  * that its failure finishes the execution of the whole process right away. */
-static int deep_copy_envs(bool propagate, const char** envp, const char*** out_envp) {
-    if (!propagate) {
-        const char** new_envp = malloc(sizeof(*new_envp));
-        if (!new_envp)
-			return -PAL_ERROR_NOMEM;
-        new_envp[0] = NULL;
-
-		*out_envp = new_envp;
-        return 0;
-    }
-
+static int deep_copy_envs(const char** envp, const char*** out_envp) {
     size_t orig_envs_cnt = 0;
     for (const char** orig_env = envp; *orig_env; orig_env++)
         orig_envs_cnt++;
@@ -164,9 +164,8 @@ static int deep_copy_envs(bool propagate, const char** envp, const char*** out_e
     size_t idx = 0;
     for (const char** orig_env = envp; *orig_env; orig_env++) {
         new_envp[idx] = strdup(*orig_env);
-        if (!new_envp[idx]) {
+        if (!new_envp[idx])
             return -PAL_ERROR_NOMEM;
-        }
         idx++;
     }
     assert(idx == orig_envs_cnt);
@@ -175,21 +174,23 @@ static int deep_copy_envs(bool propagate, const char** envp, const char*** out_e
     return 0;
 }
 
-/* Function takes original envvars in `envp` and creates a deep copy of these envvars in a new array
- * `out_envp`, augmented with envvars found in the manifest file (if any).
+/* Build environment for Gramine process, based on original environment (from host or file) and
+ * manifest. If `propagate` is true, copies all variables from `orig_envp`, except the ones
+ * overriden in manifest. Otherwise, copies only the variables from `orig_envp` that the manifest
+ * specifies as passthrough.
+ *
  * This function leaks memory on failure (and this is non-trivial to fix), but the assumption is
  * that its failure finishes the execution of the whole process right away. */
-static int augment_envs_based_on_manifest(bool propagate, const char** envp,
-                                          const char*** out_envp) {
+static int build_envs(const char** orig_envp, bool propagate, const char*** out_envp) {
     int ret;
 
     toml_table_t* toml_loader = toml_table_in(g_pal_state.manifest_root, "loader");
     if (!toml_loader)
-        return deep_copy_envs(propagate, envp, out_envp);
+        return propagate ? deep_copy_envs(orig_envp, out_envp) : create_empty_envs(out_envp);
 
     toml_table_t* toml_envs = toml_table_in(toml_loader, "env");
     if (!toml_envs)
-        return deep_copy_envs(propagate, envp, out_envp);
+        return propagate ? deep_copy_envs(orig_envp, out_envp) : create_empty_envs(out_envp);
 
     ssize_t toml_envs_cnt = toml_table_nkval(toml_envs);
     if (toml_envs_cnt < 0)
@@ -200,17 +201,15 @@ static int augment_envs_based_on_manifest(bool propagate, const char** envp,
         return -PAL_ERROR_INVAL;
 
     toml_envs_cnt += toml_env_tables_cnt;
-    if (toml_envs_cnt == 0) {
-        /* no env entries found in the manifest */
-        return deep_copy_envs(propagate, envp, out_envp);
-    }
+    if (toml_envs_cnt == 0)
+        return propagate ? deep_copy_envs(orig_envp, out_envp) : create_empty_envs(out_envp);
 
     size_t orig_envs_cnt = 0;
-    for (const char** orig_env = envp; *orig_env; orig_env++)
+    for (const char** orig_env = orig_envp; *orig_env; orig_env++)
         orig_envs_cnt++;
 
     /* For simplicity, overapproximate the number of envs by summing up the ones found in the
-     * original envp and the ones found in the manifest. */
+     * original environment and the ones found in the manifest. */
     size_t total_envs_cnt = orig_envs_cnt + toml_envs_cnt;
     const char** new_envp = calloc(total_envs_cnt + 1, sizeof(const char*));
     if (!new_envp)
@@ -220,7 +219,10 @@ static int augment_envs_based_on_manifest(bool propagate, const char** envp,
      * go through original envs and populate new_envp with only those that are not overwritten by
      * manifest envs. Then append all manifest envs to new_envp. */
     size_t idx = 0;
-    for (const char** orig_env = envp; *orig_env; orig_env++) {
+
+    /* First, go through original variables and copy the ones that we're going to use (because of
+     * `propagate`, or because passthrough is specified for that variable in manifest). */
+    for (const char** orig_env = orig_envp; *orig_env; orig_env++) {
         char* orig_env_key_end = strchr(*orig_env, '=');
         if (!orig_env_key_end)
             return -PAL_ERROR_INVAL;
@@ -249,6 +251,7 @@ static int augment_envs_based_on_manifest(bool propagate, const char** envp,
         free(env_val);
     }
 
+    /* Then, go through the manifest variables and copy the ones with value provided. */
     for (ssize_t i = 0; i < toml_envs_cnt; i++) {
         const char* toml_env_key = toml_key_in(toml_envs, i);
         assert(toml_env_key);
@@ -263,11 +266,10 @@ static int augment_envs_based_on_manifest(bool propagate, const char** envp,
         }
 
         assert(exists);
-        if (propagate && !env_val && !passthrough) {
-            /* this is not a hard-coded envvar and its passthrough == false */
-            log_error("Forbidden combination: 'loader.insecure__use_host_env' /"
-                      " 'loader.env_src_file' specified together with 'env.%s.passthrough = false'"
-                      " in manifest", toml_env_key);
+        if (!env_val && !passthrough) {
+            log_error("Detected environment variable '%s' with `passthrough = false`. For security"
+                      " reasons, Gramine doesn't allow this. Please see documentation on"
+                      " 'loader.env' for details.", toml_env_key);
             return -PAL_ERROR_DENIED;
         }
 
@@ -346,8 +348,7 @@ static void configure_logging(void) {
 
 /* Loads a file containing a concatenation of C-strings. The resulting array of pointers is
  * NULL-terminated. All C-strings inside it reside in a single malloc-ed buffer starting at
- * (*res)[0].
- */
+ * `(*res)[0]`. The caller must free `(*res)[0]` and then `*res` when done with the array. */
 static int load_cstring_array(const char* uri, const char*** res) {
     PAL_HANDLE hdl;
     PAL_STREAM_ATTR attr;
@@ -549,13 +550,15 @@ noreturn void pal_main(uint64_t instance_id,       /* current instance id */
 
     // TODO: Envs from file should be able to override ones from the manifest, but current
     // code makes this hard to implement.
-    ret = augment_envs_based_on_manifest(use_host_env || env_src_file, initial_environments,
-                                         &final_environments);
+    ret = build_envs(initial_environments, use_host_env || env_src_file, &final_environments);
     if (ret < 0)
-        INIT_FAIL(-ret, "Augmenting environment variables based on the manifest failed");
+        INIT_FAIL(-ret, "Building the final environment based on the original environment and the"
+                        " manifest failed");
 
-    if (initial_environments != environments)
+    if (initial_environments != environments) {
+        free((char*)initial_environments[0]);
         free(initial_environments);
+    }
     free(env_src_file);
 
     load_libraries();

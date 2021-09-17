@@ -6,8 +6,8 @@ loader.env.LD_LIBRARY_PATH = "/lib"
 
 loader.env.A = { passthrough = true }
 loader.env.B = { value = "OVERWRITTEN_VALUE" }
-loader.env.C = { passthrough = false }
 
+# loader.env.C = { passthrough = false }  # not allowed for security reasons
 # loader.env.E = { passthrough = true, value = "THIS_IS_INCORRECT_SYNTAX" }
 
 fs.mount.lib.type = "chroot"
