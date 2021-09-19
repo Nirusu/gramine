@@ -1,8 +1,8 @@
 subdir('graphenelibos')
 
 install_data([
-    'graphene-manifest',
     'graphene-gen-depend',
+    'graphene-manifest',
 ], install_dir: get_option('bindir'))
 
 if sgx
