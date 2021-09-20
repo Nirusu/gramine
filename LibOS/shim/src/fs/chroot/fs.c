@@ -77,19 +77,19 @@ static int chroot_dentry_uri(struct shim_dentry* dent, mode_t type, char** out_u
     size_t prefix_len;
     switch (type) {
         case S_IFREG:
-            prefix = URI_PREFIX_FILE;
+            prefix     = URI_PREFIX_FILE;
             prefix_len = static_strlen(URI_PREFIX_FILE);
             break;
         case S_IFDIR:
-            prefix = URI_PREFIX_DIR;
+            prefix     = URI_PREFIX_DIR;
             prefix_len = static_strlen(URI_PREFIX_DIR);
             break;
         case S_IFCHR:
-            prefix = URI_PREFIX_DEV;
+            prefix     = URI_PREFIX_DEV;
             prefix_len = static_strlen(URI_PREFIX_DEV);
             break;
         case KEEP_URI_PREFIX:
-            prefix = dent->mount->uri;
+            prefix     = dent->mount->uri;
             prefix_len = root - prefix;
             break;
         default:
@@ -126,7 +126,7 @@ static int chroot_dentry_uri(struct shim_dentry* dent, mode_t type, char** out_u
         memcpy(uri + prefix_len + root_len + 1, rel_path, rel_path_size);
     }
     *out_uri = uri;
-    ret = 0;
+    ret      = 0;
 
 out:
     free(rel_path);
@@ -166,7 +166,7 @@ static int chroot_lookup(struct shim_dentry* dent) {
      * not open it).
      */
     char* uri = NULL;
-    ret = chroot_dentry_uri(dent, KEEP_URI_PREFIX, &uri);
+    ret       = chroot_dentry_uri(dent, KEEP_URI_PREFIX, &uri);
     if (ret < 0)
         goto out;
 
@@ -189,9 +189,10 @@ static int chroot_lookup(struct shim_dentry* dent) {
             type = S_IFCHR;
             break;
         case PAL_TYPE_PIPE:
-            log_warning("trying to access '%s' which is a host-level FIFO (named pipe); "
-                        "Graphene supports only named pipes created by Graphene processes",
-                        uri);
+            log_warning(
+                "trying to access '%s' which is a host-level FIFO (named pipe); "
+                "Graphene supports only named pipes created by Graphene processes",
+                uri);
             ret = -EACCES;
             goto out;
         default:
@@ -199,8 +200,7 @@ static int chroot_lookup(struct shim_dentry* dent) {
             BUG();
     }
 
-    mode_t perm = (pal_attr.readable ? S_IRUSR : 0) |
-                  (pal_attr.writable ? S_IWUSR : 0) |
+    mode_t perm = (pal_attr.readable ? S_IRUSR : 0) | (pal_attr.writable ? S_IWUSR : 0) |
                   (pal_attr.runnable ? S_IXUSR : 0);
 
     file_off_t size = (type == S_IFREG ? pal_attr.pending_size : 0);
@@ -226,8 +226,8 @@ static int chroot_temp_open(struct shim_dentry* dent, mode_t type, PAL_HANDLE* o
 }
 
 /* Open a PAL handle, and associate it with a LibOS handle (if provided). */
-static int chroot_do_open(struct shim_handle* hdl, struct shim_dentry* dent, mode_t type,
-                          int flags, mode_t perm) {
+static int chroot_do_open(struct shim_handle* hdl, struct shim_dentry* dent, mode_t type, int flags,
+                          mode_t perm) {
     assert(locked(&dent->lock));
 
     int ret;
@@ -238,11 +238,11 @@ static int chroot_do_open(struct shim_handle* hdl, struct shim_dentry* dent, mod
         return ret;
 
     PAL_HANDLE palhdl;
-    int access = LINUX_OPEN_FLAGS_TO_PAL_ACCESS(flags);
-    int create = LINUX_OPEN_FLAGS_TO_PAL_CREATE(flags);
-    int options = LINUX_OPEN_FLAGS_TO_PAL_OPTIONS(flags);
+    int access       = LINUX_OPEN_FLAGS_TO_PAL_ACCESS(flags);
+    int create       = LINUX_OPEN_FLAGS_TO_PAL_CREATE(flags);
+    int options      = LINUX_OPEN_FLAGS_TO_PAL_OPTIONS(flags);
     mode_t host_perm = HOST_PERM(perm);
-    ret = DkStreamOpen(uri, access, host_perm, create, options, &palhdl);
+    ret              = DkStreamOpen(uri, access, host_perm, create, options, &palhdl);
     if (ret < 0) {
         ret = pal_to_unix_errno(ret);
         goto out;
@@ -255,11 +255,11 @@ static int chroot_do_open(struct shim_handle* hdl, struct shim_dentry* dent, mod
             goto out;
         }
 
-        hdl->type = TYPE_CHROOT;
+        hdl->type            = TYPE_CHROOT;
         hdl->info.chroot.pos = 0;
-        hdl->flags = flags;
-        hdl->acc_mode = ACC_MODE(flags & O_ACCMODE);
-        hdl->pal_handle = palhdl;
+        hdl->flags           = flags;
+        hdl->acc_mode        = ACC_MODE(flags & O_ACCMODE);
+        hdl->pal_handle      = palhdl;
     } else {
         DkObjectClose(palhdl);
     }
@@ -357,7 +357,9 @@ static int chroot_istat(struct shim_inode* inode, struct stat* buf) {
      *
      * TODO: Make this a default for filesystems that don't provide `nlink`?
      */
-    buf->st_nlink = (inode->type == FILE_DIR ? 2 : 1);
+    buf->st_nlink   = (inode->type == FILE_DIR ? 2 : 1);
+    buf->st_blksize = 4096;
+    buf->st_blocks  = (inode->size + buf->st_blksize - 1) / buf->st_blksize;
     unlock(&inode->lock);
     return 0;
 }
@@ -376,7 +378,7 @@ static int chroot_stat(struct shim_dentry* dent, struct stat* buf) {
         goto out;
 
     buf->st_dev = hash_str(dent->mount->uri);
-    ret = 0;
+    ret         = 0;
 out:
     unlock(&dent->lock);
     return ret;
@@ -507,7 +509,7 @@ static file_off_t chroot_seek(struct shim_handle* hdl, file_off_t offset, int wh
     ret = generic_seek(pos, size, offset, whence, &pos);
     if (ret == 0) {
         hdl->info.chroot.pos = pos;
-        ret = pos;
+        ret                  = pos;
     }
     unlock(&hdl->lock);
     return ret;
@@ -532,7 +534,7 @@ static int chroot_truncate(struct shim_handle* hdl, file_off_t size) {
 static int chroot_readdir(struct shim_dentry* dent, readdir_callback_t callback, void* arg) {
     int ret;
     PAL_HANDLE palhdl;
-    char* buf = NULL;
+    char* buf       = NULL;
     size_t buf_size = READDIR_BUF_SIZE;
 
     ret = chroot_temp_open(dent, S_IFDIR, &palhdl);
@@ -609,7 +611,7 @@ static int chroot_unlink(struct shim_dentry* dir, struct shim_dentry* dent) {
     }
 
     struct shim_inode* inode = dent->inode;
-    dent->inode = NULL;
+    dent->inode              = NULL;
     put_inode(inode);
 
 out:
@@ -671,11 +673,11 @@ static int chroot_rename(struct shim_dentry* old, struct shim_dentry* new) {
     /* No need to adjust refcount of `old->inode`: we add a reference from `new` and remove the one
      * from `old`. */
     new->inode = old->inode;
-    new->type = old->type;
-    new->perm = old->perm;
+    new->type  = old->type;
+    new->perm  = old->perm;
 
     old->inode = NULL;
-    ret = 0;
+    ret        = 0;
 
 out:
     unlock_two_dentries(old, new);
@@ -694,9 +696,9 @@ static int chroot_chmod(struct shim_dentry* dent, mode_t perm) {
     if (ret < 0)
         goto out;
 
-    mode_t host_perm = HOST_PERM(perm);
+    mode_t host_perm     = HOST_PERM(perm);
     PAL_STREAM_ATTR attr = {.share_flags = host_perm};
-    ret = DkStreamAttributesSetByHandle(palhdl, &attr);
+    ret                  = DkStreamAttributesSetByHandle(palhdl, &attr);
     DkObjectClose(palhdl);
     if (ret < 0) {
         ret = pal_to_unix_errno(ret);
@@ -705,7 +707,7 @@ static int chroot_chmod(struct shim_dentry* dent, mode_t perm) {
 
     /* `dent->perm` already updated by caller */
     dent->inode->perm = perm;
-    ret = 0;
+    ret               = 0;
 
 out:
     unlock(&dent->inode->lock);
@@ -718,10 +720,10 @@ static int chroot_reopen(struct shim_handle* hdl, PAL_HANDLE* out_palhdl) {
     PAL_HANDLE palhdl;
 
     mode_t mode = 0;
-    int access = LINUX_OPEN_FLAGS_TO_PAL_ACCESS(hdl->flags);
-    int create = 0;
+    int access  = LINUX_OPEN_FLAGS_TO_PAL_ACCESS(hdl->flags);
+    int create  = 0;
     int options = LINUX_OPEN_FLAGS_TO_PAL_OPTIONS(hdl->flags);
-    int ret = DkStreamOpen(uri, access, mode, create, options, &palhdl);
+    int ret     = DkStreamOpen(uri, access, mode, create, options, &palhdl);
     if (ret < 0)
         return pal_to_unix_errno(ret);
     *out_palhdl = palhdl;
@@ -770,7 +772,7 @@ static int chroot_checkin(struct shim_handle* hdl) {
 
     if (!hdl->pal_handle) {
         PAL_HANDLE palhdl = NULL;
-        int ret = chroot_reopen(hdl, &palhdl);
+        int ret           = chroot_reopen(hdl, &palhdl);
         if (ret < 0) {
             log_warning("%s: failed to open %s: %d", __func__, qstrgetstr(&hdl->uri), ret);
             return ret;
@@ -782,17 +784,17 @@ static int chroot_checkin(struct shim_handle* hdl) {
 }
 
 struct shim_fs_ops chroot_fs_ops = {
-    .mount      = &chroot_mount,
-    .flush      = &chroot_flush,
-    .read       = &chroot_read,
-    .write      = &chroot_write,
-    .mmap       = &chroot_mmap,
-    .seek       = &chroot_seek,
-    .hstat      = &chroot_hstat,
-    .truncate   = &chroot_truncate,
-    .poll       = &chroot_poll,
-    .checkout   = &chroot_checkout,
-    .checkin    = &chroot_checkin,
+    .mount    = &chroot_mount,
+    .flush    = &chroot_flush,
+    .read     = &chroot_read,
+    .write    = &chroot_write,
+    .mmap     = &chroot_mmap,
+    .seek     = &chroot_seek,
+    .hstat    = &chroot_hstat,
+    .truncate = &chroot_truncate,
+    .poll     = &chroot_poll,
+    .checkout = &chroot_checkout,
+    .checkin  = &chroot_checkin,
 };
 
 struct shim_d_ops chroot_d_ops = {
