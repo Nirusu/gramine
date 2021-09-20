@@ -6,7 +6,7 @@
  * "pread64", "pwrite64", "getdents", "getdents64", "fsync", "truncate" and "ftruncate".
  */
 
-#define _POSIX_C_SOURCE 200809L  /* for SSIZE_MAX */
+#define _POSIX_C_SOURCE 200809L /* for SSIZE_MAX */
 
 #include <dirent.h>
 #include <errno.h>
@@ -104,10 +104,6 @@ long shim_do_creat(const char* path, mode_t mode) {
 }
 
 long shim_do_openat(int dfd, const char* filename, int flags, int mode) {
-    if (flags & O_PATH) {
-        return -EINVAL;
-    }
-
     if (!is_user_string_readable(filename))
         return -EFAULT;
 
@@ -120,7 +116,7 @@ long shim_do_openat(int dfd, const char* filename, int flags, int mode) {
     }
 
     struct shim_dentry* dir = NULL;
-    int ret = 0;
+    int ret                 = 0;
 
     if (*filename != '/' && (ret = get_dirfd_dentry(dfd, &dir)) < 0)
         return ret;
@@ -180,7 +176,7 @@ static file_off_t do_lseek_dir(struct shim_handle* hdl, off_t offset, int origin
     if (ret < 0)
         goto out;
     dirhdl->pos = pos;
-    ret = pos;
+    ret         = pos;
 
 out:
     unlock(&hdl->lock);
@@ -229,7 +225,7 @@ long shim_do_pread64(int fd, char* buf, size_t count, loff_t pos) {
         return -EBADF;
 
     struct shim_fs* fs = hdl->fs;
-    ssize_t ret = -EACCES;
+    ssize_t ret        = -EACCES;
 
     if (!(hdl->acc_mode & MAY_READ)) {
         ret = -EBADF;
@@ -286,7 +282,7 @@ long shim_do_pwrite64(int fd, char* buf, size_t count, loff_t pos) {
         return -EBADF;
 
     struct shim_fs* fs = hdl->fs;
-    ssize_t ret = -EACCES;
+    ssize_t ret        = -EACCES;
 
     if (!(hdl->acc_mode & MAY_WRITE)) {
         ret = -EBADF;
@@ -386,18 +382,18 @@ static ssize_t do_getdents(int fd, uint8_t* buf, size_t buf_size, bool is_getden
         size_t name_len;
 
         if (dirhdl->pos == 0) {
-            name = ".";
+            name     = ".";
             name_len = 1;
         } else if (dirhdl->pos == 1) {
-            name = "..";
+            name     = "..";
             name_len = 2;
         } else {
-            name = dent->name;
+            name     = dent->name;
             name_len = dent->name_len;
         }
 
         uint64_t d_ino = dentry_ino(dent);
-        char d_type = get_dirent_type(dent->type);
+        char d_type    = get_dirent_type(dent->type);
 
         size_t ent_size;
 
@@ -408,30 +404,29 @@ static ssize_t do_getdents(int fd, uint8_t* buf, size_t buf_size, bool is_getden
                 break;
 
             struct linux_dirent64* ent = (struct linux_dirent64*)(buf + buf_pos);
-            memset(ent, 0, ent_size); // this ensures `name` will be null-terminated
+            memset(ent, 0, ent_size);  // this ensures `name` will be null-terminated
 
-            ent->d_ino = d_ino;
-            ent->d_off = dirhdl->pos;
+            ent->d_ino    = d_ino;
+            ent->d_off    = dirhdl->pos;
             ent->d_reclen = ent_size;
-            ent->d_type = d_type;
+            ent->d_type   = d_type;
             memcpy(&ent->d_name, name, name_len);
         } else {
             /* Note that `struct linux_dirent_tail` starts with a zero padding byte, so we don't
              * need to account for extra null byte at the end of `name`. */
-            ent_size = ALIGN_UP(
-                sizeof(struct linux_dirent) + sizeof(struct linux_dirent_tail) + name_len,
-                alignof(struct linux_dirent)
-            );
+            ent_size =
+                ALIGN_UP(sizeof(struct linux_dirent) + sizeof(struct linux_dirent_tail) + name_len,
+                         alignof(struct linux_dirent));
             if (buf_pos + ent_size > buf_size)
                 break;
 
             struct linux_dirent* ent = (struct linux_dirent*)(buf + buf_pos);
             struct linux_dirent_tail* tail =
                 (struct linux_dirent_tail*)(buf + buf_pos + ent_size - sizeof(*tail));
-            memset(ent, 0, ent_size); // this ensures `name` will be null-terminated
+            memset(ent, 0, ent_size);  // this ensures `name` will be null-terminated
 
-            ent->d_ino = d_ino;
-            ent->d_off = dirhdl->pos;
+            ent->d_ino    = d_ino;
+            ent->d_off    = dirhdl->pos;
             ent->d_reclen = ent_size;
             memcpy(&ent->d_name, name, name_len);
             tail->d_type = d_type;
@@ -479,7 +474,7 @@ long shim_do_fsync(int fd) {
     if (!hdl)
         return -EBADF;
 
-    int ret = 0;
+    int ret            = 0;
     struct shim_fs* fs = hdl->fs;
 
     if (!fs || !fs->fs_ops)
@@ -510,7 +505,7 @@ long shim_do_truncate(const char* path, loff_t length) {
         return -EINVAL;
 
     struct shim_dentry* dent = NULL;
-    int ret = 0;
+    int ret                  = 0;
 
     if (!is_user_string_readable(path))
         return -EFAULT;
