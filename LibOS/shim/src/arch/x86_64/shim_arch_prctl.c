@@ -26,3 +26,9 @@ long shim_do_arch_prctl(int code, void* addr) {
             return -ENOSYS;
     }
 }
+
+long shim_do_prctl(int code, void* addr) {
+    code = code;
+    addr = addr;
+    return 0;
+}
