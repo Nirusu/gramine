@@ -479,7 +479,7 @@ long shim_do_fsync(int fd) {
     if (!hdl)
         return -EBADF;
 
-    int ret = -EACCES;
+    int ret = 0;
     struct shim_fs* fs = hdl->fs;
 
     if (!fs || !fs->fs_ops)
