@@ -359,7 +359,7 @@ static int chroot_istat(struct shim_inode* inode, struct stat* buf) {
      */
     buf->st_nlink   = (inode->type == FILE_DIR ? 2 : 1);
     buf->st_blksize = 4096;
-    buf->st_blocks  = (inode->size + buf->st_blksize - 1) / buf->st_blksize;
+    buf->st_blocks  = ((inode->size + buf->st_blksize - 1) / buf->st_blksize) * 8; // st_blocks is in 512-byte units
     unlock(&inode->lock);
     return 0;
 }
